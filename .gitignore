@@ -3,3 +3,4 @@ zig-*
 debug
 release
 *.zlsreplay
+.history
