@@ -39,6 +39,7 @@ pub const TokenType = enum(u32) {
     keywordLiteral,
     @"union",
     @"opaque",
+    zigem,
 };
 
 pub const TokenModifiers = packed struct(u16) {
@@ -151,6 +152,7 @@ const Builder = struct {
             .regexp,
             .decorator,
             .errorTag,
+            .zigem,
             => {},
 
             .@"union",
@@ -177,6 +179,8 @@ const Builder = struct {
         // assert that the `@intCast(length)` below is safe
         comptime std.debug.assert(DocumentStore.max_document_size == std.math.maxInt(u32));
 
+        std.log.debug("*** token_type {s} = {d}", .{ @tagName(token_type), @intFromEnum(token_type) });
+
         try self.token_buffer.appendSlice(self.arena, &.{
             delta.line,
             delta.character,
@@ -188,6 +192,13 @@ const Builder = struct {
         self.source_index = loc.end;
     }
 };
+
+fn isZigem(name: []const u8) bool {
+    if (std.mem.eql(u8, name, "em")) return true;
+    if (std.mem.startsWith(u8, name, "em__")) return true;
+    if (std.mem.startsWith(u8, name, "EM__")) return true;
+    return false;
+}
 
 inline fn writeToken(builder: *Builder, token_idx: ?Ast.TokenIndex, tok_type: TokenType) !void {
     return try writeTokenMod(builder, token_idx, tok_type, .{});
@@ -278,6 +289,8 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
     const tag = node_tags[node];
     const main_token = main_tokens[node];
 
+    std.log.debug("*** tag = {s}", .{@tagName(tag)});
+
     switch (tag) {
         .root => unreachable,
         .container_field,
@@ -321,7 +334,10 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             try writeToken(builder, var_decl.comptime_token, .keyword);
             try writeToken(builder, var_decl.ast.mut_token, .keyword);
 
-            if (try builder.analyser.resolveTypeOfNode(.{ .node = node, .handle = handle })) |decl_type| {
+            const decl_name = offsets.identifierTokenToNameSlice(tree, var_decl.ast.mut_token + 1);
+            if (isZigem(decl_name)) {
+                try writeToken(builder, var_decl.ast.mut_token + 1, .zigem);
+            } else if (try builder.analyser.resolveTypeOfNode(.{ .node = node, .handle = handle })) |decl_type| {
                 try colorIdentifierBasedOnType(builder, decl_type, var_decl.ast.mut_token + 1, false, .{ .declaration = true });
             } else {
                 try writeTokenMod(builder, var_decl.ast.mut_token + 1, .variable, .{ .declaration = true });
@@ -997,6 +1013,7 @@ fn writeIdentifier(builder: *Builder, name_token: Ast.Node.Index) error{OutOfMem
     const tree = handle.tree;
 
     const name = offsets.identifierTokenToNameSlice(tree, name_token);
+
     const is_escaped_identifier = tree.source[tree.tokens.items(.start)[name_token]] == '@';
 
     if (!is_escaped_identifier) {
