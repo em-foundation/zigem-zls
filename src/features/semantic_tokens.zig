@@ -59,6 +59,8 @@ pub const TokenModifiers = packed struct(u16) {
     _: u5 = 0,
 };
 
+var cur_em_active = false;
+
 const Builder = struct {
     arena: std.mem.Allocator,
     analyser: *Analyser,
@@ -200,10 +202,6 @@ fn zigemType(name: []const u8) ?TokenType {
     if (std.mem.startsWith(u8, name, "em__")) return TokenType.zigem;
     if (std.mem.startsWith(u8, name, "EM__")) return TokenType.zigemMarker;
     return null;
-}
-
-fn isZigem(name: []const u8) bool {
-    if (zigemType(name)) |tok_type| return (tok_type == TokenType.zigem) else return false;
 }
 
 inline fn writeToken(builder: *Builder, token_idx: ?Ast.TokenIndex, tok_type: TokenType) !void {
@@ -442,7 +440,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
 
             const fn_name = offsets.identifierTokenToNameSlice(tree, fn_proto.name_token.?);
 
-            const func_name_tok_type: TokenType = if (isZigem(fn_name))
+            const func_name_tok_type: TokenType = if (zigemType(fn_name) != null)
                 .zigem
             else if (Analyser.isTypeFunction(tree, fn_proto))
                 .type
@@ -876,7 +874,9 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
         },
         .identifier => {
             const id_name = offsets.identifierTokenToNameSlice(tree, main_token);
-            if (isZigem(id_name)) {
+            if (zigemType(id_name) != null) {
+                cur_em_active = std.mem.eql(u8, id_name, "em");
+                std.log.debug("*** em active", .{});
                 try writeToken(builder, main_token, .zigem);
                 return;
             }
@@ -890,6 +890,14 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             const symbol_name = offsets.identifierTokenToNameSlice(tree, data.rhs);
 
             try writeNodeTokens(builder, data.lhs);
+
+            std.log.debug("*** field {s}, {any}", .{ symbol_name, cur_em_active });
+
+            if (cur_em_active) {
+                cur_em_active = false;
+                try writeToken(builder, data.rhs, .zigem);
+                return;
+            }
 
             // TODO This is basically exactly the same as what is done in analysis.resolveTypeOfNode, with the added
             //      writeToken code.
