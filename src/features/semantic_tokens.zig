@@ -438,7 +438,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
                 .is_type_val = true,
             };
 
-            const fn_name = offsets.identifierTokenToNameSlice(tree, fn_proto.name_token.?);
+            const fn_name = if (fn_proto.name_token == null) "" else offsets.identifierTokenToNameSlice(tree, fn_proto.name_token.?);
 
             const func_name_tok_type: TokenType = if (zigemType(fn_name) != null)
                 .zigem
