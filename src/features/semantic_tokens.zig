@@ -1002,10 +1002,12 @@ fn writeContainerField(builder: *Builder, node: Ast.Node.Index, container_decl: 
     var container_field = tree.fullContainerField(node).?;
 
     const fld_name_tok = container_field.ast.main_token;
-    const fld_name = offsets.identifierTokenToNameSlice(builder.handle.tree, fld_name_tok);
-    if (zigemType(fld_name)) |tok_type| {
-        try writeToken(builder, fld_name_tok, tok_type);
-        return;
+    if (tree.tokens.items(.tag)[fld_name_tok] == .identifier) {
+        const fld_name = offsets.identifierTokenToNameSlice(builder.handle.tree, fld_name_tok);
+        if (zigemType(fld_name)) |tok_type| {
+            try writeToken(builder, fld_name_tok, tok_type);
+            return;
+        }
     }
 
     const field_token_type = fieldTokenType(container_decl, builder.handle, false) orelse .property;
