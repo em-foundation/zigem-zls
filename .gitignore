@@ -1,5 +1,6 @@
 # Zig magic stuff
 zig-*
+.zig-cache
 debug
 release
 *.zlsreplay
