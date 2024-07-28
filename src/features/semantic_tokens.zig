@@ -39,6 +39,8 @@ pub const TokenType = enum(u32) {
     keywordLiteral,
     @"union",
     @"opaque",
+    zigem,
+    zigemMarker,
 };
 
 pub const TokenModifiers = packed struct(u16) {
@@ -56,6 +58,8 @@ pub const TokenModifiers = packed struct(u16) {
     generic: bool = false,
     _: u5 = 0,
 };
+
+var cur_em_active = false;
 
 const Builder = struct {
     arena: std.mem.Allocator,
@@ -151,6 +155,8 @@ const Builder = struct {
             .regexp,
             .decorator,
             .errorTag,
+            .zigem,
+            .zigemMarker,
             => {},
 
             .@"union",
@@ -177,6 +183,8 @@ const Builder = struct {
         // assert that the `@intCast(length)` below is safe
         comptime std.debug.assert(DocumentStore.max_document_size == std.math.maxInt(u32));
 
+        std.log.debug("*** token_type {s} = {d}", .{ @tagName(token_type), @intFromEnum(token_type) });
+
         try self.token_buffer.appendSlice(self.arena, &.{
             delta.line,
             delta.character,
@@ -188,6 +196,13 @@ const Builder = struct {
         self.source_index = loc.end;
     }
 };
+
+fn zigemType(name: []const u8) ?TokenType {
+    if (std.mem.eql(u8, name, "em")) return TokenType.zigem;
+    if (std.mem.startsWith(u8, name, "em__")) return TokenType.zigem;
+    if (std.mem.startsWith(u8, name, "EM__")) return TokenType.zigemMarker;
+    return null;
+}
 
 inline fn writeToken(builder: *Builder, token_idx: ?Ast.TokenIndex, tok_type: TokenType) !void {
     return try writeTokenMod(builder, token_idx, tok_type, .{});
@@ -278,6 +293,8 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
     const tag = node_tags[node];
     const main_token = main_tokens[node];
 
+    std.log.debug("*** tag = {s}", .{@tagName(tag)});
+
     switch (tag) {
         .root => unreachable,
         .container_field,
@@ -321,7 +338,10 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             try writeToken(builder, var_decl.comptime_token, .keyword);
             try writeToken(builder, var_decl.ast.mut_token, .keyword);
 
-            if (try builder.analyser.resolveTypeOfNode(.{ .node = node, .handle = handle })) |decl_type| {
+            const decl_name = offsets.identifierTokenToNameSlice(tree, var_decl.ast.mut_token + 1);
+            if (zigemType(decl_name)) |tok_type| {
+                try writeToken(builder, var_decl.ast.mut_token + 1, tok_type);
+            } else if (try builder.analyser.resolveTypeOfNode(.{ .node = node, .handle = handle })) |decl_type| {
                 try colorIdentifierBasedOnType(builder, decl_type, var_decl.ast.mut_token + 1, false, .{ .declaration = true });
             } else {
                 try writeTokenMod(builder, var_decl.ast.mut_token + 1, .variable, .{ .declaration = true });
@@ -418,7 +438,11 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
                 .is_type_val = true,
             };
 
-            const func_name_tok_type: TokenType = if (Analyser.isTypeFunction(tree, fn_proto))
+            const fn_name = if (fn_proto.name_token == null) "" else offsets.identifierTokenToNameSlice(tree, fn_proto.name_token.?);
+
+            const func_name_tok_type: TokenType = if (zigemType(fn_name) != null)
+                .zigem
+            else if (Analyser.isTypeFunction(tree, fn_proto))
                 .type
             else if (try builder.analyser.hasSelfParam(func_ty))
                 .method
@@ -849,6 +873,13 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             try writeNodeTokens(builder, node_data[node].rhs);
         },
         .identifier => {
+            const id_name = offsets.identifierTokenToNameSlice(tree, main_token);
+            if (zigemType(id_name) != null) {
+                cur_em_active = std.mem.eql(u8, id_name, "em");
+                std.log.debug("*** em active", .{});
+                try writeToken(builder, main_token, .zigem);
+                return;
+            }
             if (tree.tokens.items(.tag)[main_token] != .identifier) return; // why parser? why?
             try writeIdentifier(builder, main_token);
         },
@@ -859,6 +890,14 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             const symbol_name = offsets.identifierTokenToNameSlice(tree, data.rhs);
 
             try writeNodeTokens(builder, data.lhs);
+
+            std.log.debug("*** field {s}, {any}", .{ symbol_name, cur_em_active });
+
+            if (cur_em_active) {
+                cur_em_active = false;
+                try writeToken(builder, data.rhs, .zigem);
+                return;
+            }
 
             // TODO This is basically exactly the same as what is done in analysis.resolveTypeOfNode, with the added
             //      writeToken code.
@@ -961,6 +1000,16 @@ fn writeContainerField(builder: *Builder, node: Ast.Node.Index, container_decl: 
     const tree = builder.handle.tree;
 
     var container_field = tree.fullContainerField(node).?;
+
+    const fld_name_tok = container_field.ast.main_token;
+    if (tree.tokens.items(.tag)[fld_name_tok] == .identifier) {
+        const fld_name = offsets.identifierTokenToNameSlice(builder.handle.tree, fld_name_tok);
+        if (zigemType(fld_name)) |tok_type| {
+            try writeToken(builder, fld_name_tok, tok_type);
+            return;
+        }
+    }
+
     const field_token_type = fieldTokenType(container_decl, builder.handle, false) orelse .property;
 
     const token_tags = tree.tokens.items(.tag);
@@ -997,6 +1046,7 @@ fn writeIdentifier(builder: *Builder, name_token: Ast.Node.Index) error{OutOfMem
     const tree = handle.tree;
 
     const name = offsets.identifierTokenToNameSlice(tree, name_token);
+
     const is_escaped_identifier = tree.source[tree.tokens.items(.start)[name_token]] == '@';
 
     if (!is_escaped_identifier) {

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .zig-cache/
 zig-out/
 result/
@@ -5,3 +6,12 @@ result/
 
 # Remove on the next lunar eclipse or whatever
 zig-cache
+=======
+# Zig magic stuff
+zig-*
+.zig-cache
+debug
+release
+*.zlsreplay
+.history
+>>>>>>> bob-work
