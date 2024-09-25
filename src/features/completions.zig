@@ -593,15 +593,15 @@ fn completeFieldAccess(builder: *Builder, loc: offsets.Loc) error{OutOfMemory}!v
 fn kindToSortScore(kind: types.CompletionItemKind) ?[]const u8 {
     return switch (kind) {
         .Module => "1_", // use for packages
-        .Function, .Method => "1_", // zigem
         .Folder => "2_",
         .File => "3_",
 
-        .Constant => "1_",
+        .Function, .Method => "1_", // zigem
 
-        .Variable => "2_",
-        .Field => "3_",
-        // .Function, .Method => "4_",
+        .Constant => "2_",
+
+        .Variable => "3_",
+        .Field => "4_",
 
         .Keyword, .Snippet, .EnumMember => "5_",
 
@@ -894,6 +894,7 @@ pub fn completionAtIndex(
 
         // TODO: config for sorting rule?
         const prefix = kindToSortScore(item.kind.?) orelse continue;
+        // std.log.debug("+++ lab = {s}, kind = {s}, pre = {s}", .{ item.label, @tagName(item.kind.?), prefix });
 
         item.sortText = try std.fmt.allocPrint(arena, "{s}{s}", .{ prefix, item.label });
     }
