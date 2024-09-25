@@ -32,6 +32,8 @@ fn typeToCompletion(builder: *Builder, ty: Analyser.Type) error{OutOfMemory}!voi
 
     try builder.completions.ensureUnusedCapacity(builder.arena, 2);
 
+    // std.log.debug("+++ pos_context {s}", .{@tagName(ty.data)});
+
     switch (ty.data) {
         .pointer => |info| switch (info.size) {
             .One, .C => {
@@ -132,6 +134,7 @@ fn typeToCompletion(builder: *Builder, ty: Analyser.Type) error{OutOfMemory}!voi
                         .parent_container_ty = ty,
                     });
                 }
+                // std.log.debug("+++ items.len = {d}", .{decls.items.len});
             },
             .fn_proto,
             .fn_proto_multi,
@@ -149,6 +152,7 @@ fn typeToCompletion(builder: *Builder, ty: Analyser.Type) error{OutOfMemory}!voi
         ),
         .either => |either_entries| {
             for (either_entries) |entry| {
+                // std.log.debug("+++ entry {any}", .{entry.type_data});
                 const entry_ty = Analyser.Type{ .data = entry.type_data, .is_type_val = ty.is_type_val };
                 try typeToCompletion(builder, entry_ty);
             }
@@ -226,6 +230,9 @@ fn declToCompletion(builder: *Builder, decl_handle: Analyser.DeclWithHandle, opt
         break :blk "";
     };
 
+    // std.log.debug("+++ decl name = {s}, kind = {s}", .{ name, @tagName(decl_handle.decl) });
+    if (decl_handle.decl == .ast_node and isZigem(name)) return;
+
     switch (decl_handle.decl) {
         .ast_node,
         .function_parameter,
@@ -301,6 +308,13 @@ fn declToCompletion(builder: *Builder, decl_handle: Analyser.DeclWithHandle, opt
             });
         },
     }
+}
+
+fn isZigem(name: []const u8) bool {
+    if (std.mem.eql(u8, name, "em")) return true;
+    if (std.mem.startsWith(u8, name, "EM__")) return true;
+    if (std.mem.startsWith(u8, name, "em__") and name.len == 5) return true;
+    return false;
 }
 
 fn functionTypeCompletion(
@@ -579,6 +593,7 @@ fn completeFieldAccess(builder: *Builder, loc: offsets.Loc) error{OutOfMemory}!v
 fn kindToSortScore(kind: types.CompletionItemKind) ?[]const u8 {
     return switch (kind) {
         .Module => "1_", // use for packages
+        .Function, .Method => "1_", // zigem
         .Folder => "2_",
         .File => "3_",
 
@@ -586,7 +601,7 @@ fn kindToSortScore(kind: types.CompletionItemKind) ?[]const u8 {
 
         .Variable => "2_",
         .Field => "3_",
-        .Function, .Method => "4_",
+        // .Function, .Method => "4_",
 
         .Keyword, .Snippet, .EnumMember => "5_",
 

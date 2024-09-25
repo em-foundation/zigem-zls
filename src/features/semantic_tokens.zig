@@ -183,7 +183,7 @@ const Builder = struct {
         // assert that the `@intCast(length)` below is safe
         comptime std.debug.assert(DocumentStore.max_document_size == std.math.maxInt(u32));
 
-        std.log.debug("*** token_type {s} = {d}", .{ @tagName(token_type), @intFromEnum(token_type) });
+        // std.log.debug("*** token_type {s} = {d}", .{ @tagName(token_type), @intFromEnum(token_type) });
 
         try self.token_buffer.appendSlice(self.arena, &.{
             delta.line,
@@ -293,7 +293,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
     const tag = node_tags[node];
     const main_token = main_tokens[node];
 
-    std.log.debug("*** tag = {s}", .{@tagName(tag)});
+    // std.log.debug("*** tag = {s}", .{@tagName(tag)});
 
     switch (tag) {
         .root => unreachable,
@@ -876,7 +876,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             const id_name = offsets.identifierTokenToNameSlice(tree, main_token);
             if (zigemType(id_name) != null) {
                 cur_em_active = std.mem.eql(u8, id_name, "em");
-                std.log.debug("*** em active", .{});
+                // std.log.debug("*** em active", .{});
                 try writeToken(builder, main_token, .zigem);
                 return;
             }
@@ -891,7 +891,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
 
             try writeNodeTokens(builder, data.lhs);
 
-            std.log.debug("*** field {s}, {any}", .{ symbol_name, cur_em_active });
+            // std.log.debug("*** field {s}, {any}", .{ symbol_name, cur_em_active });
 
             if (cur_em_active) {
                 cur_em_active = false;
