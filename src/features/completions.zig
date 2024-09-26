@@ -313,7 +313,7 @@ fn declToCompletion(builder: *Builder, decl_handle: Analyser.DeclWithHandle, opt
 fn isZigem(name: []const u8) bool {
     if (std.mem.eql(u8, name, "em")) return true;
     if (std.mem.startsWith(u8, name, "EM__")) return true;
-    if (std.mem.startsWith(u8, name, "em__") and name.len == 5) return true;
+    if (std.mem.startsWith(u8, name, "em__")) return true;
     return false;
 }
 
