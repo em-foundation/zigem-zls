@@ -166,7 +166,7 @@ pub fn build(b: *Build) !void {
     release(b, &release_targets, release_artifacts.constSlice());
 
     const exe = b.addExecutable(.{
-        .name = "zls-em",
+        .name = "zigem-zls",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
